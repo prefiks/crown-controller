@@ -1,0 +1,39 @@
+global:
+  mode: Ratcheted
+  mapping:
+    Ctrl:
+      left:
+        - KeyPress: "AudioPrev"
+      right:
+        - KeyPress: "AudioNext"
+      left_pressed:
+        - KeyPress: "AudioLowerVolume"
+      right_pressed:
+        - KeyPress: "AudioRaiseVolume"
+      click:
+        - KeyPress: "AudioPlay"
+firefox-bin:
+  mode: Ratcheted
+  mapping:
+    None:
+      right_pressed: # Switch to next tab
+        - KeyPress: "Ctrl+Tab"
+      left_pressed: # Switch to previous tab
+        - KeyPress: "Ctrl+Shift+Tab"
+      right: # Scroll down
+        - KeyPress: "Down"
+      left: # Scroll up
+        - KeyPress: "Up"
+spotify:
+  mapping:
+    None:
+      right:
+        - KeyPress: "Shift+Right"
+      left:
+        - KeyPress: "Shift+Left"
+      right_pressed: # Next song
+        - KeyPress: "ctrl+Right"
+      left_pressed: # Previous song
+        - KeyPress: "ctrl+Left"
+      click: # Pause
+        - KeyPress: "Space"

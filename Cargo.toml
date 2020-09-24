@@ -1,0 +1,21 @@
+[package]
+name = "crown-controller"
+version = "0.1.0"
+authors = ["Paweł Chmielowski <prefiks@prefiks.org>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+crossbeam-channel = "0.4.2"
+serde = { version = "1.0.114", features = ["derive", "rc"] }
+serde_yaml = "0.8.13"
+directories = "3.0.1"
+x11rb = { version = "0.6.0", features = ["xtest"] }
+mio = { version = "0.7.0", features = ["os-poll", "os-util"] }
+phf = "0.8.0"
+udev = "0.4.0"
+libc = "0.2.77"
+
+[build-dependencies]
+phf_codegen = "0.8.0"
