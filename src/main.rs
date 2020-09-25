@@ -68,6 +68,18 @@ fn main() -> () {
                     execute_commands(commands, &x11_handler, debug_enabled);
                 };
             }
+            StateChanges::CrownTouched {modifiers} => {
+                let modifiers = Modifier::from(modifiers);
+                if let (_, Some(commands)) = config.get_mapping_for_modifiers(modifiers) {
+                    execute_commands(&commands.touch, &x11_handler, debug_enabled);
+                }
+            }
+            StateChanges::CrownReleased {modifiers} => {
+                let modifiers = Modifier::from(modifiers);
+                if let (_, Some(commands)) = config.get_mapping_for_modifiers(modifiers) {
+                    execute_commands(&commands.release, &x11_handler, debug_enabled);
+                }
+            }
             StateChanges::CrownClicked { modifiers } => {
                 let modifiers = Modifier::from(modifiers);
                 if let (_, Some(commands)) = config.get_mapping_for_modifiers(modifiers) {
