@@ -64,20 +64,20 @@ pub(crate) enum CrownEvent {
 fn decode_event(data: &[u8]) -> CrownEvent {
     //println!("Event to decode {:x?}", data);
     match data {
-        [0x11, 0x03, 0x12, 0x00, rot, rot_am, rot_notch, _, _, _, pres, ..] if *rot != 0 => {
+        [0x11, _, 0x12, 0x00, rot, rot_am, rot_notch, _, _, _, pres, ..] if *rot != 0 => {
             CrownEvent::Rotate {
                 amount: *rot_am as i8 as i16,
                 pressed: *pres != 0x0,
                 notch_amount: *rot_notch as i8 as i16,
             }
         }
-        [0x11, 0x03, 0x12, 0x00, 0x00, 0x00, 0x00, _, _, _, 0x01, ..] => CrownEvent::Press,
-        [0x11, 0x03, 0x12, 0x00, 0x00, 0x00, 0x00, _, _, _, 0x05, ..] => CrownEvent::Release,
-        [0x11, 0x03, 0x12, 0x00, 0x00, 0x00, 0x00, _, 0x01, ..] => CrownEvent::Touch,
-        [0x11, 0x03, 0x12, 0x00, 0x00, 0x00, 0x00, _, 0x03, ..] => CrownEvent::Leave,
-        [0x20, 0x03, 0x01, m, ..] => CrownEvent::KeyPress { modifiers: *m },
+        [0x11, _, 0x12, 0x00, 0x00, 0x00, 0x00, _, _, _, 0x01, ..] => CrownEvent::Press,
+        [0x11, _, 0x12, 0x00, 0x00, 0x00, 0x00, _, _, _, 0x05, ..] => CrownEvent::Release,
+        [0x11, _, 0x12, 0x00, 0x00, 0x00, 0x00, _, 0x01, ..] => CrownEvent::Touch,
+        [0x11, _, 0x12, 0x00, 0x00, 0x00, 0x00, _, 0x03, ..] => CrownEvent::Leave,
+        [0x20, _, 0x01, m, ..] => CrownEvent::KeyPress { modifiers: *m },
         [0x01, m, ..] => CrownEvent::KeyPress { modifiers: *m },
-        [0x10, 0x03, 0x41, ..] => CrownEvent::Connected,
+        [0x10, _, 0x41, ..] => CrownEvent::Connected,
         _ => CrownEvent::Unknown
     }
 }
