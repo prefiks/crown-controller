@@ -20,9 +20,11 @@ pub(crate) enum StateChanges {
     CrownRotated { modifiers: u8, amount: i16, notch_amount: i16, pressed: bool },
 }
 
-fn execute_commands(commands: &[Operation], x11_handler: &X11Handler) {
+fn execute_commands(commands: &[Operation], x11_handler: &X11Handler, debug_enabled: bool) {
     for command in commands {
-        println!("Exec {:?}", command);
+        if debug_enabled {
+            println!("Exec {:?}", command);
+        }
         match command {
             Operation::KeyPress(keysym, modifiers) => {
                 x11_handler.send_key(*keysym, *modifiers);
@@ -33,14 +35,17 @@ fn execute_commands(commands: &[Operation], x11_handler: &X11Handler) {
 }
 
 fn main() -> () {
+    let mut args = pico_args::Arguments::from_env();
+
+    let debug_enabled: bool = args.contains(["-d", "--debug"]);
+
     let (sender, receiver) = crossbeam_channel::unbounded();
-    let x11_handler = X11Handler::new(sender.clone()).unwrap();
-    let hid_handler = HidHandler::new(sender.clone()).unwrap();
+    let x11_handler = X11Handler::new(sender.clone(), debug_enabled).unwrap();
+    let hid_handler = HidHandler::new(sender.clone(), debug_enabled).unwrap();
     let mut config = ConfigFile::new();
 
     loop {
         let res = receiver.recv().unwrap();
-        //println!("got {:?}", res);
         match res {
             StateChanges::FocusChanged { program, .. } => {
                 config.select_app(&program);
@@ -60,13 +65,13 @@ fn main() -> () {
                         (_, _, amount, _) if amount < 0 => &commands.left,
                         _ => continue
                     };
-                    execute_commands(commands, &x11_handler);
+                    execute_commands(commands, &x11_handler, debug_enabled);
                 };
             }
             StateChanges::CrownClicked { modifiers } => {
                 let modifiers = Modifier::from(modifiers);
                 if let (_, Some(commands)) = config.get_mapping_for_modifiers(modifiers) {
-                    execute_commands(&commands.click, &x11_handler);
+                    execute_commands(&commands.click, &x11_handler, debug_enabled);
                 }
             }
             _ => {}

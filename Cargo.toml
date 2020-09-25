@@ -16,6 +16,7 @@ mio = { version = "0.7.0", features = ["os-poll", "os-util"] }
 phf = "0.8.0"
 udev = "0.4.0"
 libc = "0.2.77"
+pico-args = "0.3.4"
 
 [build-dependencies]
 phf_codegen = "0.8.0"

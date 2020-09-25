@@ -10,7 +10,7 @@ use libc;
 use mio::{Events, Interest, Poll, Token, Waker};
 use mio::unix::SourceFd;
 
-use super::StateChanges;
+use crate::StateChanges;
 
 #[derive(Debug)]
 enum CrownCommands {
@@ -24,11 +24,11 @@ pub(crate) struct HidHandler {
 }
 
 impl HidHandler {
-    pub fn new(sender: Sender<StateChanges>) -> std::io::Result<HidHandler> {
+    pub fn new(sender: Sender<StateChanges>, debug_enabled: bool) -> std::io::Result<HidHandler> {
         let (my_sender, my_receiver) = crossbeam_channel::unbounded();
         let poll = Poll::new()?;
         let waker = Arc::new(Waker::new(poll.registry(), Token(10))?);
-        let _x = spawn(move || hid_listener(sender, my_receiver, poll));
+        let _x = spawn(move || hid_listener(sender, my_receiver, poll, debug_enabled));
 
         Ok(HidHandler {
             my_sender,
@@ -62,7 +62,6 @@ pub(crate) enum CrownEvent {
 }
 
 fn decode_event(data: &[u8]) -> CrownEvent {
-    //println!("Event to decode {:x?}", data);
     match data {
         [0x11, _, 0x12, 0x00, rot, rot_am, rot_notch, _, _, _, pres, ..] if *rot != 0 => {
             CrownEvent::Rotate {
@@ -91,12 +90,14 @@ fn switch_ratcher(handle: &mut File, enabled: bool) -> () {
 }
 
 
-fn hid_listener(sender: Sender<StateChanges>, receiver: Receiver<CrownCommands>, mut poll: Poll) -> () {
+fn hid_listener(sender: Sender<StateChanges>, receiver: Receiver<CrownCommands>, mut poll: Poll,
+                debug_enabled: bool) -> ()
+{
     let mut ratchet_enabled = true;
     let mut modifiers = 0;
     let mut had_rotation = false;
 
-    if let Ok(Some(dev_path)) = super::udev::find_hidraw_device(0x46D, 0x4066) {
+    if let Ok(Some(dev_path)) = crate::udev::find_hidraw_device(0x46D, 0x4066) {
         let mut fh = OpenOptions::new().
             read(true).
             write(true).
@@ -116,6 +117,9 @@ fn hid_listener(sender: Sender<StateChanges>, receiver: Receiver<CrownCommands>,
             for event in &events {
                 if event.token() != hidraw_token {
                     if let Ok(command) = receiver.try_recv() {
+                        if debug_enabled {
+                            println!("Mode events: {:?}", command);
+                        }
                         match command {
                             CrownCommands::EnableRatchet => {
                                 ratchet_enabled = true;
@@ -131,6 +135,9 @@ fn hid_listener(sender: Sender<StateChanges>, receiver: Receiver<CrownCommands>,
                     while let Ok(size) = fh.read(buf.as_mut()) {
                         let slice = &buf[0..size];
                         let event = decode_event(slice);
+                        if debug_enabled {
+                            println!("Crown events: {:x?} {:?}", slice, event);
+                        }
                         match event {
                             CrownEvent::Connected => {
                                 switch_ratcher(&mut fh, ratchet_enabled);
@@ -160,7 +167,6 @@ fn hid_listener(sender: Sender<StateChanges>, receiver: Receiver<CrownCommands>,
                             }
                             _ => {}
                         }
-                        //println!("{:x?} {:?}", slice, event);
                     }
                 }
             }

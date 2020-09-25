@@ -31,12 +31,12 @@ pub(crate) struct X11Handler {
 }
 
 impl X11Handler {
-    pub fn new(event_receiver: Sender<StateChanges>) -> std::io::Result<X11Handler> {
+    pub fn new(event_receiver: Sender<StateChanges>, debug_enabled: bool) -> std::io::Result<X11Handler> {
         let (my_sender, my_receiver) = crossbeam_channel::unbounded();
         let poll = Poll::new()?;
         let waker = Arc::new(Waker::new(poll.registry(), Token(10))?);
 
-        let _x = spawn(move || x11_listener(event_receiver, my_receiver, poll));
+        let _x = spawn(move || x11_listener(event_receiver, my_receiver, poll, debug_enabled));
 
         Ok(X11Handler {
             my_sender,
@@ -121,7 +121,9 @@ fn send_keypress(conn: &impl Connection, keycode: u8, modifiers: u8, keycodes_of
     let _ = conn.flush();
 }
 
-fn x11_listener(sender: Sender<StateChanges>, receiver: Receiver<X11Commands>, mut poll: Poll) -> () {
+fn x11_listener(sender: Sender<StateChanges>, receiver: Receiver<X11Commands>, mut poll: Poll,
+                debug_enabled: bool) -> ()
+{
     let mut events = Events::with_capacity(2);
 
     let (conn, screen_num) = RustConnection::connect(None).unwrap();
@@ -130,7 +132,9 @@ fn x11_listener(sender: Sender<StateChanges>, receiver: Receiver<X11Commands>, m
     let root_win = screen.root;
     let atoms = AtomCollection::new(&conn).unwrap().reply().unwrap();
 
-    if change_window_attributes(&conn, root_win, &ChangeWindowAttributesAux::new().event_mask(EventMask::PropertyChange)).is_ok() {
+    if change_window_attributes(&conn, root_win, &ChangeWindowAttributesAux::new().
+        event_mask(EventMask::PropertyChange)).is_ok()
+    {
         let _ = conn.flush();
     }
 
@@ -146,7 +150,9 @@ fn x11_listener(sender: Sender<StateChanges>, receiver: Receiver<X11Commands>, m
                     match command {
                         X11Commands::SendKey { keysym, modifiers: key_modifiers } => {
                             if let Some((keycode, modifiers)) = mapping.get(&keysym) {
-                                println!("command {:x?} {:x?} {:x?}, {:x?}", keycode, keysym, modifiers, key_modifiers);
+                                if debug_enabled {
+                                    println!("command {:x?} {:x?} {:x?}, {:x?}", keycode, keysym, modifiers, key_modifiers);
+                                }
                                 send_keypress(&conn, *keycode, key_modifiers, &keycodes_of_mods);
                             }
                         }
@@ -179,6 +185,9 @@ fn x11_listener(sender: Sender<StateChanges>, receiver: Receiver<X11Commands>, m
                                                 } else {
                                                     "".to_owned()
                                                 };
+                                            if debug_enabled {
+                                                println!("App switch: {} {}", pid, program);
+                                            }
                                             let _ = sender.send(StateChanges::FocusChanged { pid, program });
                                         } else {
                                             let _ = sender.send(StateChanges::FocusChanged { pid: 0, program: "".to_owned() });
