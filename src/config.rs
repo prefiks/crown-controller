@@ -33,12 +33,23 @@ impl Default for RatchetMode {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub(crate) enum Modifier {
     None,
     Shift,
     Alt,
     Ctrl,
+}
+
+#[derive(Copy, Clone)]
+pub(crate) enum Action {
+    Touch,
+    Release,
+    Left,
+    LeftPressed,
+    Right,
+    RightPressed,
+    Click,
 }
 
 impl From<u8> for Modifier {
@@ -89,6 +100,8 @@ fn deserialize_string_lowercase<'de, D>(deserializer: D) -> Result<(u32, u8), D:
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct ButtonMapping {
+    #[serde(default)]
+    pub(crate) mode: Option<RatchetMode>,
     #[serde(default)]
     pub(crate) touch: Vec<Operation>,
     #[serde(default)]
@@ -145,23 +158,48 @@ impl ConfigFile {
         conf
     }
 
-    pub fn select_app(&mut self, app: &str) {
+    pub(crate) fn select_app(&mut self, app: &str) {
         self.active_app = Some(app.to_owned());
         self.maybe_load_config();
         self.update_app_config();
     }
 
-    pub(crate) fn get_mapping_for_modifiers(&mut self, modifiers: Modifier) -> (RatchetMode, Option<Rc<ButtonMapping>>) {
+    fn get_actions_from_mapping(mapping: &Rc<ButtonMapping>, action: Action) -> Option<&[Operation]> {
+        let actions = match action {
+            Action::Touch => mapping.touch.as_slice(),
+            Action::Release => mapping.release.as_slice(),
+            Action::Left => mapping.left.as_slice(),
+            Action::LeftPressed => mapping.left_pressed.as_slice(),
+            Action::Right => mapping.right.as_slice(),
+            Action::RightPressed => mapping.right_pressed.as_slice(),
+            Action::Click => mapping.click.as_slice(),
+        };
+        if actions.is_empty() {
+            None
+        } else {
+            Some(actions)
+        }
+    }
+
+    pub(crate) fn get_actions_for_modifiers(&mut self, modifiers: Modifier, action: Action) -> Option<&[Operation]> {
         self.maybe_load_config();
         let (active_conf, global_conf) = (self.active_conf.as_ref(), self.global_conf.as_ref());
-        active_conf.
-            and_then(|v| v.mapping.get(&modifiers).
-                and_then(|v2| Some((v.mode, v2.clone())))).
+
+        active_conf.and_then(|v| v.mapping.get(&modifiers).
+            and_then(|v2| Self::get_actions_from_mapping(v2, action))).
             or_else(|| global_conf.and_then(|ref v| v.mapping.get(&modifiers).
-                and_then(|v2| Some((v.mode, v2.clone()))))).
-            map_or_else(
-                || global_conf.map_or((RatchetMode::Ratcheted, None), |v| (v.mode, None)),
-                |(mode, mapping)| (mode, Some(mapping)))
+                and_then(|v2| Self::get_actions_from_mapping(v2, action))))
+    }
+
+    pub(crate) fn ratchet_mode_for_modifier(&mut self, modifiers: Modifier) -> RatchetMode {
+        self.maybe_load_config();
+        let (active_conf, global_conf) = (self.active_conf.as_ref(), self.global_conf.as_ref());
+
+        active_conf.and_then(|v| v.mapping.get(&modifiers).
+            and_then(|v2| v2.mode.or_else(|| Some(v.mode)))).
+            or_else(|| global_conf.and_then(|ref v| v.mapping.get(&modifiers).
+                and_then(|v2| v2.mode.or_else(|| Some(v.mode))))).
+            map_or(RatchetMode::Ratcheted, |v| v)
     }
 
     fn maybe_load_config(&mut self) {

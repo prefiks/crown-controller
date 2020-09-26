@@ -1,4 +1,4 @@
-use crate::config::{ConfigFile, Modifier, Operation, RatchetMode};
+use crate::config::{ConfigFile, Modifier, Operation, RatchetMode, Action};
 use crate::hid::HidHandler;
 use crate::x11::X11Handler;
 
@@ -14,6 +14,7 @@ pub(crate) mod keysyms {
 #[derive(Debug)]
 pub(crate) enum StateChanges {
     FocusChanged { pid: u32, program: String },
+    ModifiersChanged { modifiers: u8 },
     CrownTouched { modifiers: u8 },
     CrownReleased { modifiers: u8 },
     CrownClicked { modifiers: u8 },
@@ -43,50 +44,74 @@ fn main() -> () {
     let x11_handler = X11Handler::new(sender.clone(), debug_enabled).unwrap();
     let hid_handler = HidHandler::new(sender.clone(), debug_enabled).unwrap();
     let mut config = ConfigFile::new();
+    let mut last_mode = RatchetMode::Ratcheted;
+    let mut last_modifiers = Modifier::None;
 
     loop {
         let res = receiver.recv().unwrap();
+        if debug_enabled {
+            println!("Processing {:?}", res);
+        }
         match res {
             StateChanges::FocusChanged { program, .. } => {
                 config.select_app(&program);
-                match config.get_mapping_for_modifiers(Modifier::None) {
-                    (RatchetMode::Ratcheted, _) => hid_handler.enable_ratcher(),
-                    _ => hid_handler.disable_ratcher(),
-                };
+                let mode = config.ratchet_mode_for_modifier(last_modifiers);
+                if mode != last_mode {
+                    last_mode = mode;
+                    match mode {
+                        RatchetMode::Ratcheted => hid_handler.enable_ratcher(),
+                        _ => hid_handler.disable_ratcher(),
+                    };
+                }
+            }
+            StateChanges::ModifiersChanged { modifiers } => {
+                let modifiers = Modifier::from(modifiers);
+                if last_modifiers != modifiers {
+                    last_modifiers = modifiers;
+                    let mode = config.ratchet_mode_for_modifier(modifiers);
+                    if mode != last_mode {
+                        last_mode = mode;
+                        match mode {
+                            RatchetMode::Ratcheted => hid_handler.enable_ratcher(),
+                            _ => hid_handler.disable_ratcher(),
+                        };
+                    }
+                }
             }
             StateChanges::CrownRotated { modifiers, amount, pressed, notch_amount, .. } => {
                 let modifiers = Modifier::from(modifiers);
-                if let (mode, Some(commands)) = config.get_mapping_for_modifiers(modifiers) {
-                    let commands = match (mode, notch_amount, amount, pressed) {
-                        (RatchetMode::Ratcheted, na, ..) if na == 0 => continue,
-                        (_, _, amount, true) if amount > 0 => &commands.right_pressed,
-                        (_, _, amount, true) if amount < 0 => &commands.left_pressed,
-                        (_, _, amount, _) if amount > 0 => &commands.right,
-                        (_, _, amount, _) if amount < 0 => &commands.left,
-                        _ => continue
-                    };
-                    execute_commands(commands, &x11_handler, debug_enabled);
+                let action = match (amount, pressed) {
+                    (amount, true) if amount > 0 => Action::RightPressed,
+                    (amount, true) if amount < 0 => Action::LeftPressed,
+                    (amount, _) if amount > 0 => Action::Right,
+                    (amount, _) if amount < 0 => Action::Left,
+                    _ => continue
                 };
+                if last_mode == RatchetMode::Ratcheted && notch_amount == 0 {
+                    continue;
+                }
+                if let Some(actions) = config.get_actions_for_modifiers(modifiers, action) {
+                    execute_commands(actions, &x11_handler, debug_enabled);
+                }
             }
             StateChanges::CrownTouched {modifiers} => {
                 let modifiers = Modifier::from(modifiers);
-                if let (_, Some(commands)) = config.get_mapping_for_modifiers(modifiers) {
-                    execute_commands(&commands.touch, &x11_handler, debug_enabled);
+                if let Some(actions) = config.get_actions_for_modifiers(modifiers, Action::Touch) {
+                    execute_commands(actions, &x11_handler, debug_enabled);
                 }
             }
             StateChanges::CrownReleased {modifiers} => {
                 let modifiers = Modifier::from(modifiers);
-                if let (_, Some(commands)) = config.get_mapping_for_modifiers(modifiers) {
-                    execute_commands(&commands.release, &x11_handler, debug_enabled);
+                if let Some(actions) = config.get_actions_for_modifiers(modifiers, Action::Release) {
+                    execute_commands(actions, &x11_handler, debug_enabled);
                 }
             }
             StateChanges::CrownClicked { modifiers } => {
                 let modifiers = Modifier::from(modifiers);
-                if let (_, Some(commands)) = config.get_mapping_for_modifiers(modifiers) {
-                    execute_commands(&commands.click, &x11_handler, debug_enabled);
+                if let Some(actions) = config.get_actions_for_modifiers(modifiers, Action::Click) {
+                    execute_commands(actions, &x11_handler, debug_enabled);
                 }
             }
-            _ => {}
         }
     }
 }

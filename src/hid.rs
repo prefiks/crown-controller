@@ -143,6 +143,7 @@ fn hid_listener(sender: Sender<StateChanges>, receiver: Receiver<CrownCommands>,
                                 switch_ratcher(&mut fh, ratchet_enabled);
                             }
                             CrownEvent::KeyPress { modifiers: m } => {
+                                let _ = sender.send(StateChanges::ModifiersChanged { modifiers: m });
                                 modifiers = m;
                             }
                             CrownEvent::Touch => {
