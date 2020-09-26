@@ -93,6 +93,8 @@ fn send_keypress(conn: &impl Connection, keycode: u8, modifiers: u8, keycodes_of
                                         let mut pressed_modifiers = 0u8;
                                         for (mod_keycode, modifier) in keycodes_of_mods {
                                             if r.keys[(*mod_keycode / 8) as usize] & (1 << (*mod_keycode & 7)) != 0 {
+                                                let _ = fake_input(conn, KEY_RELEASE_EVENT, *mod_keycode, CURRENT_TIME, NONE, 0, 0, 0);
+                                                let _ = conn.flush();
                                                 if *modifier & modifiers == 0 {
                                                     to_restore.push((*mod_keycode, KEY_PRESS_EVENT));
                                                 }
