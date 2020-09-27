@@ -1,6 +1,7 @@
 use crate::config::{ConfigFile, Modifier, Operation, RatchetMode, Action};
 use crate::hid::HidHandler;
 use crate::x11::X11Handler;
+use std::process::Command;
 
 mod x11;
 mod hid;
@@ -30,7 +31,12 @@ fn execute_commands(commands: &[Operation], x11_handler: &X11Handler, debug_enab
             Operation::KeyPress(keysym, modifiers) => {
                 x11_handler.send_key(*keysym, *modifiers);
             }
-            _ => {}
+            Operation::Execute(command) => {
+                let mut parts = command.split_ascii_whitespace();
+                if let Some(cmd) = parts.next() {
+                    let _ = Command::new(cmd).args(parts).spawn();
+                }
+            }
         }
     }
 }
